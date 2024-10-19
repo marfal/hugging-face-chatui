@@ -39,7 +39,7 @@ RUN mkdir -p /data/db
 RUN chown -R 1000:1000 /data/db
 
 # final image
-FROM local_db_${INCLUDE_DB} AS final
+FROM local_db_false AS final
 
 # build arg to determine if the database should be included
 ARG INCLUDE_DB=false
