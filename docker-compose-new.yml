@@ -13,10 +13,8 @@ services:
 
   chat-ui:
     build:
-      context: .
+      context: https://github.com/huggingface/chat-ui.git
       dockerfile: Dockerfile
-        args:
-          INCLUDE_DB: "false"
     restart: always
     depends_on:
       mongo:
