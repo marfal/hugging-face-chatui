@@ -1,37 +1,87 @@
-version: "3"
-services:
-  mongo:
-    image: mongo:7
-    restart: always
-    volumes:
-      - mongo-data:/data/db
-    healthcheck:
-      test: ["CMD", "mongo", "admin", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+# syntax=docker/dockerfile:1
+# read the doc: https://huggingface.co/docs/hub/spaces-sdks-docker
+# you will also find guides on how best to write your Dockerfile
 
-  chat-ui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        INCLUDE_DB: "false"
-    restart: always
-    depends_on:
-      mongo:
-        condition: service_healthy
-    ports:
-      - "5173:5173"
-    environment:
-      - MONGODB_URL=mongodb://mongo:27017
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-    volumes:
-      - ./_dotenv.local:/app/.env.local
-      - chat-ui-data:/app/data
+FROM node:20 AS builder
 
-volumes:
-  mongo-data:
-  chat-ui-data:
+WORKDIR /app
+
+COPY --link --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/package.json package.json
+
+ARG APP_BASE=
+ARG PUBLIC_APP_COLOR=blue
+ENV BODY_SIZE_LIMIT=15728640
+
+RUN --mount=type=cache,target=/app/.npm \
+        npm set cache /app/.npm && \
+        npm ci
+
+COPY --link --chown=1000 https://github.com/huggingface/chat-ui.git .
+
+RUN npm run build
+
+# mongo image
+FROM mongo:7 AS mongo
+
+# image to be used if INCLUDE_DB is false
+FROM node:20-slim AS local_db_false
+
+# image to be used if INCLUDE_DB is true
+FROM node:20-slim AS local_db_true
+
+RUN apt-get update
+RUN apt-get install gnupg curl -y
+# copy mongo from the other stage
+COPY --from=mongo /usr/bin/mongo* /usr/bin/
+
+ENV MONGODB_URL=mongodb://localhost:27017
+RUN mkdir -p /data/db
+RUN chown -R 1000:1000 /data/db
+
+# final image
+FROM local_db_${INCLUDE_DB} AS final
+
+# build arg to determine if the database should be included
+ARG INCLUDE_DB=false
+ENV INCLUDE_DB=${INCLUDE_DB}
+
+# svelte requires APP_BASE at build time so it must be passed as a build arg
+ARG APP_BASE=
+# tailwind requires the primary theme to be known at build time so it must be passed as a build arg
+ARG PUBLIC_APP_COLOR=blue
+ENV BODY_SIZE_LIMIT=15728640
+
+# install dotenv-cli
+RUN npm install -g dotenv-cli
+
+# switch to a user that works for spaces
+RUN userdel -r node
+RUN useradd -m -u 1000 user
+USER user
+
+ENV HOME=/home/user \
+	PATH=/home/user/.local/bin:$PATH
+
+WORKDIR /app
+
+# add a .env.local if the user doesn't bind a volume to it
+RUN touch /app/.env.local
+
+# get the default config, the entrypoint script and the server script
+COPY --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/.env /app/.env
+COPY --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/entrypoint.sh /app/entrypoint.sh
+COPY --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/gcp-oauth2-service-account-credentials.json /app/
+
+#import the build & dependencies
+COPY --from=builder --chown=1000 /app/build /app/build
+COPY --from=builder --chown=1000 /app/node_modules /app/node_modules
+
+RUN npx playwright install
+
+USER root
+RUN npx playwright install-deps
+USER user
+
+RUN chmod +x /app/entrypoint.sh
+
+CMD ["/bin/bash", "-c", "/app/entrypoint.sh"]
