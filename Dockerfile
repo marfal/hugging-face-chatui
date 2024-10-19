@@ -6,7 +6,7 @@ FROM node:20 AS builder
 
 WORKDIR /app
 
-COPY --link --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/package.json package.json
+COPY https://raw.githubusercontent.com/huggingface/chat-ui/main/package-lock.json https://raw.githubusercontent.com/huggingface/chat-ui/main/package.json .
 
 ARG APP_BASE=
 ARG PUBLIC_APP_COLOR=blue
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/app/.npm \
         npm set cache /app/.npm && \
         npm ci
 
-COPY --link --chown=1000 https://github.com/huggingface/chat-ui.git .
+COPY https://github.com/huggingface/chat-ui.git .
 
 RUN npm run build
 
@@ -68,13 +68,11 @@ WORKDIR /app
 RUN touch /app/.env.local
 
 # get the default config, the entrypoint script and the server script
-COPY --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/.env /app/.env
-COPY --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/entrypoint.sh /app/entrypoint.sh
-COPY --chown=1000 https://raw.githubusercontent.com/huggingface/chat-ui/main/gcp-oauth2-service-account-credentials.json /app/
+COPY https://raw.githubusercontent.com/huggingface/chat-ui/main/.env https://raw.githubusercontent.com/huggingface/chat-ui/main/entrypoint.sh https://raw.githubusercontent.com/huggingface/chat-ui/main/gcp-oauth2-service-account-credentials.json .
 
 #import the build & dependencies
-COPY --from=builder --chown=1000 /app/build /app/build
-COPY --from=builder --chown=1000 /app/node_modules /app/node_modules
+COPY --from=builder /app/build /app/build
+COPY --from=builder /app/node_modules /app/node_modules
 
 RUN npx playwright install
 
