@@ -1,11 +1,16 @@
 # Add your environment variables here
-MONGODB_URL=
+MONGODB_URL=mongodb://mongo:27017
 OPENROUTER_API_KEY=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
-OPENID_CONFIG=
+OPENID_CONFIG='{
+  "PROVIDER_URL": "https://accounts.google.com",
+  "CLIENT_ID": "YOUR_CLIENT_ID",
+  "CLIENT_SECRET": "YOUR_CLIENT_SECRET",
+  "SCOPES": "openid profile email"
+}'
 SERPER_API_KEY=
-MESSAGES_BEFORE_LOGIN=
+MESSAGES_BEFORE_LOGIN=0
 
 # Optional
 MODELS='[
